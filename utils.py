@@ -1,62 +1,56 @@
+from typing import List
+from PIL import Image
 import re
-from typing import Tuple, List
 
-# -------------------------------
-# 1. استخراج اسم الزوج والزمن من اسم الصورة
-# -------------------------------
-def extract_symbol_timeframe(filename: str) -> Tuple[str, str]:
+def extract_symbol_timeframe(filename: str):
     """
-    يحاول استخراج اسم الزوج والإطار الزمني من اسم الملف باستخدام regex.
-    مثال على اسم الملف: 'GBPUSD_15m.jpg'
+    يستخرج الزوج والفريم الزمني من اسم الملف (مثل GBPUSD_15M.jpg)
     """
     filename = filename.lower()
-    match = re.search(r"([a-z]{6})[_\-]?(\d+[mh])", filename)
+    match = re.match(r"([a-z]{6})[_\-]?(\d{1,2}[mh])", filename)
     if match:
         symbol = match.group(1).upper()
-        timeframe = match.group(2).upper()
-        return symbol, timeframe
-    return "غير معروف", "غير معروف"
+        tf = match.group(2).upper()
+        return symbol, tf
+    return "زوج غير معروف", "فريم غير معروف"
 
-# -------------------------------
-# 2. تحليل الاتجاه العام
-# -------------------------------
-def detect_trend(candles: List[dict]) -> str:
+def detect_trend(prices: List[float]) -> str:
     """
-    يحلل الاتجاه العام باستخدام نسبة الشموع الصاعدة والهابطة.
-    الشمعة تُعد صاعدة إذا كان الإغلاق > الافتتاح.
+    تحليل الاتجاه بناءً على تسلسل أسعار الإغلاق
     """
-    ups = sum(1 for c in candles if c["close"] > c["open"])
-    downs = sum(1 for c in candles if c["close"] < c["open"])
-    total = len(candles)
-
-    if total == 0:
+    if len(prices) < 3:
         return "غير معروف"
+    
+    ups = sum(prices[i] < prices[i+1] for i in range(len(prices)-1))
+    downs = sum(prices[i] > prices[i+1] for i in range(len(prices)-1))
 
-    if ups >= total * 0.7:
+    if ups >= len(prices) * 0.7:
         return "صاعد"
-    elif downs >= total * 0.7:
+    elif downs >= len(prices) * 0.7:
         return "هابط"
     else:
         return "عرضي"
 
-# -------------------------------
-# 3. تحديد نوع الشمعة الأخيرة (قوية، ضعيفة، عادية)
-# -------------------------------
-def detect_candle_type(open_price: float, close_price: float, high_price: float, low_price: float) -> str:
+def detect_candle_type(open_price, close_price, high_price, low_price) -> str:
     """
-    يصنف الشمعة الأخيرة بناءً على حجم جسم الشمعة مقارنة بنطاقها الكلي.
+    تحديد نوع الشمعة الأخيرة (ابتلاعية، دوجي، قوية...)
     """
-    body_size = abs(close_price - open_price)
-    candle_range = high_price - low_price
-
-    if candle_range == 0:
+    body = abs(close_price - open_price)
+    range_ = high_price - low_price
+    if range_ == 0:
         return "شمعة غير صالحة"
 
-    body_ratio = body_size / candle_range
+    body_ratio = body / range_
 
-    if body_ratio >= 0.7:
-        return "شمعة قوية"
-    elif body_ratio <= 0.2:
-        return "شمعة ضعيفة"
+    if body_ratio > 0.7:
+        if close_price > open_price:
+            return "شمعة صاعدة قوية"
+        else:
+            return "شمعة هابطة قوية"
+    elif body_ratio < 0.2:
+        return "شمعة دوجي"
     else:
-        return "شمعة عادية"
+        if close_price > open_price:
+            return "شمعة صاعدة"
+        else:
+            return "شمعة هابطة"
