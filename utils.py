@@ -1,38 +1,42 @@
-from PIL import Image
+import re
 import numpy as np
 
-def detect_trend(image):
-    """
-    تحليل بدائي للاتجاه بناءً على توزيع الألوان العمودية.
-    سيتم تحسينه لاحقًا باستخدام تحليل أكثر دقة للقمم والقيعان.
-    """
-    image = image.convert("L")
-    arr = np.array(image)
+# استخراج اسم الزوج والفريم من اسم الصورة
+def extract_symbol_timeframe(filename):
+    filename = filename.lower()
+    match = re.search(r"([a-z]{6,7})(\d{1,2}m|[1-4]h|1d)", filename)
+    if match:
+        symbol = match.group(1).upper()
+        timeframe = match.group(2).upper()
+        return symbol, timeframe
+    return "زوج غير معروف", "فريم غير معروف"
 
-    top = np.mean(arr[:int(arr.shape[0] / 2), :])
-    bottom = np.mean(arr[int(arr.shape[0] / 2):, :])
+# تحليل الاتجاه العام من قائمة أسعار (قيمة الإغلاق)
+def detect_trend(close_prices):
+    if len(close_prices) < 5:
+        return "اتجاه غير كافٍ"
 
-    if bottom < top - 10:
+    trend_score = np.polyfit(range(len(close_prices)), close_prices, 1)[0]
+
+    if trend_score > 0.01:
         return "صاعد"
-    elif top < bottom - 10:
+    elif trend_score < -0.01:
         return "هابط"
     else:
         return "عرضي"
 
-def detect_candle_strength(image):
-    """
-    تحليل بدائي لحجم الشمعة الأخيرة بناءً على الطول الرأسي للعنصر الأيمن في الصورة.
-    """
-    gray = image.convert("L")
-    arr = np.array(gray)
+# تحديد نوع الشمعة (ابتلاعية، قوية، ضعيفة...)
+def detect_candle_type(open_price, close_price, high_price, low_price):
+    body = abs(close_price - open_price)
+    total_range = high_price - low_price
+    if total_range == 0:
+        return "شمعة غير صالحة"
 
-    right_half = arr[:, int(arr.shape[1]*0.7):]  # آخر جزء من الشارت
-    vertical_std = np.std(right_half, axis=1)
-    diff = np.max(vertical_std) - np.min(vertical_std)
+    body_ratio = body / total_range
 
-    if diff > 15:
-        return "ابتلاع صاعد"
-    elif diff < -15:
-        return "ابتلاع هابط"
+    if body_ratio > 0.7:
+        return "شمعة قوية"
+    elif body_ratio > 0.4:
+        return "شمعة عادية"
     else:
         return "شمعة ضعيفة"
