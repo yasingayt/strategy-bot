@@ -1,56 +1,62 @@
-from typing import List, Tuple
 import re
-from PIL import Image
-import pytesseract
+from typing import Tuple, List
 
-# ✅ استخراج اسم الزوج والفريم من اسم الملف
+# -------------------------------
+# 1. استخراج اسم الزوج والزمن من اسم الصورة
+# -------------------------------
 def extract_symbol_timeframe(filename: str) -> Tuple[str, str]:
-    filename = filename.name.lower() if hasattr(filename, 'name') else filename.lower()
-    match = re.search(r"(gbpusd|eurusd|xauusd).*?(1m|5m|15m|30m|1h|4h|1d)", filename)
+    """
+    يحاول استخراج اسم الزوج والإطار الزمني من اسم الملف باستخدام regex.
+    مثال على اسم الملف: 'GBPUSD_15m.jpg'
+    """
+    filename = filename.lower()
+    match = re.search(r"([a-z]{6})[_\-]?(\d+[mh])", filename)
     if match:
-        return match.group(1).upper(), match.group(2).upper()
-    return "زوج غير معروف", "فريم غير معروف"
+        symbol = match.group(1).upper()
+        timeframe = match.group(2).upper()
+        return symbol, timeframe
+    return "غير معروف", "غير معروف"
 
-# ✅ كشف نوع الشمعة الأخيرة
-def detect_candle_type(close_prices: List[float]) -> str:
-    if len(close_prices) < 3:
-        return "غير كافية"
-    body = abs(close_prices[-1] - close_prices[-2])
-    previous_body = abs(close_prices[-2] - close_prices[-3])
-    if body > previous_body * 1.3:
-        return "شمعة قوية"
-    elif body < previous_body * 0.5:
-        return "شمعة ضعيفة"
-    else:
-        return "شمعة عادية"
+# -------------------------------
+# 2. تحليل الاتجاه العام
+# -------------------------------
+def detect_trend(candles: List[dict]) -> str:
+    """
+    يحلل الاتجاه العام باستخدام نسبة الشموع الصاعدة والهابطة.
+    الشمعة تُعد صاعدة إذا كان الإغلاق > الافتتاح.
+    """
+    ups = sum(1 for c in candles if c["close"] > c["open"])
+    downs = sum(1 for c in candles if c["close"] < c["open"])
+    total = len(candles)
 
-# ✅ كشف الاتجاه العام
-def detect_trend(candles) -> str:
-    try:
-        # إذا كان كل عنصر dict يحتوي على open/close
-        if isinstance(candles[0], dict):
-            ups = sum(1 for c in candles if c["close"] > c["open"])
-            downs = sum(1 for c in candles if c["close"] < c["open"])
-        else:
-            # إذا كانت قائمة أسعار فقط
-            ups = sum(1 for i in range(1, len(candles)) if candles[i] > candles[i-1])
-            downs = sum(1 for i in range(1, len(candles)) if candles[i] < candles[i-1])
-    except Exception as e:
-        print("Trend Detection Error:", e)
+    if total == 0:
         return "غير معروف"
 
-    if ups > downs:
+    if ups >= total * 0.7:
         return "صاعد"
-    elif downs > ups:
+    elif downs >= total * 0.7:
         return "هابط"
     else:
         return "عرضي"
 
-# ✅ تحويل صورة إلى نص باستخدام OCR
-def extract_text_from_image(image_path: str) -> str:
-    try:
-        image = Image.open(image_path)
-        text = pytesseract.image_to_string(image, lang='eng+ara')
-        return text
-    except Exception as e:
-        return f"خطأ في قراءة الصورة: {str(e)}"
+# -------------------------------
+# 3. تحديد نوع الشمعة الأخيرة (قوية، ضعيفة، عادية)
+# -------------------------------
+def detect_candle_type(open_price: float, close_price: float, high_price: float, low_price: float) -> str:
+    """
+    يصنف الشمعة الأخيرة بناءً على حجم جسم الشمعة مقارنة بنطاقها الكلي.
+    """
+    body_size = abs(close_price - open_price)
+    candle_range = high_price - low_price
+
+    if candle_range == 0:
+        return "شمعة غير صالحة"
+
+    body_ratio = body_size / candle_range
+
+    if body_ratio >= 0.7:
+        return "شمعة قوية"
+    elif body_ratio <= 0.2:
+        return "شمعة ضعيفة"
+    else:
+        return "شمعة عادية"
