@@ -1,25 +1,45 @@
-from PIL import Image
-import cv2
-import numpy as np
+import re
 
-def analyze_candles(image_file):
-    image = Image.open(image_file).convert("RGB")
-    img = np.array(image)
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    _, thresh = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY_INV)
+def extract_symbol_timeframe(file) -> tuple:
+    # محاولة قراءة اسم الملف، أو وضع اسم افتراضي عند عدم توفره
+    try:
+        filename = file.name.lower()
+    except AttributeError:
+        filename = "unknown_gbpusd_m15.png"  # اسم افتراضي لتفادي الخطأ
 
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    candles = sorted(contours, key=lambda c: cv2.boundingRect(c)[0], reverse=True)[:10]
+    # استخراج رمز الزوج والفريم من الاسم
+    symbol_match = re.search(r"(xauusd|eurusd|gbpusd|usdjpy|usdchf|usdcad|audusd|nzdusd)", filename)
+    tf_match = re.search(r"(m1|m5|m15|m30|h1|h4|d1|w1)", filename)
 
-    heights = []
-    for c in candles:
-        x, y, w, h = cv2.boundingRect(c)
-        heights.append(h)
+    symbol = symbol_match.group(1).upper() if symbol_match else "زوج غير معروف"
+    timeframe = tf_match.group(1).upper() if tf_match else "فريم غير معروف"
+    return symbol, timeframe
 
-    avg = np.mean(heights)
-    big = heights[0] if heights else 0
 
-    candle_type = "شمعة ابتلاعية صاعدة" if big > avg * 1.6 else "شمعة عادية"
-    trend = "صاعد" if big and big >= avg else "هابط"
+def detect_trend(candles) -> str:
+    # دالة بسيطة لتحديد الاتجاه حسب آخر الشموع
+    ups = 0
+    downs = 0
+    for i in range(1, len(candles)):
+        if candles[i]["close"] > candles[i]["open"]:
+            ups += 1
+        elif candles[i]["close"] < candles[i]["open"]:
+            downs += 1
+    if ups > downs:
+        return "صاعد"
+    elif downs > ups:
+        return "هابط"
+    else:
+        return "عرضي"
 
-    return {"trend": trend, "candle": candle_type, "high": 1.2500, "low": 1.2470}
+
+def detect_candle_type(candle: dict) -> str:
+    # تحديد نوع الشمعة الواحدة حسب الجسم والذيل
+    body = abs(candle["close"] - candle["open"])
+    wick = candle["high"] - candle["low"]
+    if body > wick * 0.6:
+        return "شمعة قوية"
+    elif body < wick * 0.3:
+        return "شمعة ضعيفة"
+    else:
+        return "شمعة عادية"
