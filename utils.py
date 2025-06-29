@@ -1,56 +1,60 @@
-from typing import List
-from PIL import Image
 import re
 
-def extract_symbol_timeframe(filename: str):
+def extract_symbol_timeframe(filename):
     """
-    يستخرج الزوج والفريم الزمني من اسم الملف (مثل GBPUSD_15M.jpg)
+    استخراج اسم الزوج والفريم الزمني من اسم الملف.
+    مثال: GBPUSD_15m.jpg → (GBPUSD, 15m)
     """
     filename = filename.lower()
-    match = re.match(r"([a-z]{6})[_\-]?(\d{1,2}[mh])", filename)
+    match = re.search(r"([a-z]{6,7})[_\- ]?(\d{1,2}[mh])", filename)
     if match:
-        symbol = match.group(1).upper()
-        tf = match.group(2).upper()
-        return symbol, tf
+        return match.group(1).upper(), match.group(2)
     return "زوج غير معروف", "فريم غير معروف"
 
-def detect_trend(prices: List[float]) -> str:
+def detect_trend(candles):
     """
-    تحليل الاتجاه بناءً على تسلسل أسعار الإغلاق
+    تحليل الاتجاه العام بناءً على إغلاق وفتح الشموع.
     """
-    if len(prices) < 3:
-        return "غير معروف"
-    
-    ups = sum(prices[i] < prices[i+1] for i in range(len(prices)-1))
-    downs = sum(prices[i] > prices[i+1] for i in range(len(prices)-1))
+    ups = sum(1 for c in candles if c["close"] > c["open"])
+    downs = sum(1 for c in candles if c["close"] < c["open"])
 
-    if ups >= len(prices) * 0.7:
+    if ups > downs:
         return "صاعد"
-    elif downs >= len(prices) * 0.7:
+    elif downs > ups:
         return "هابط"
     else:
-        return "عرضي"
+        return "الاتجاه غير واضح"
 
-def detect_candle_type(open_price, close_price, high_price, low_price) -> str:
+def detect_candle_type(open_price, close_price, high, low):
     """
-    تحديد نوع الشمعة الأخيرة (ابتلاعية، دوجي، قوية...)
+    تصنيف نوع الشمعة (قوية أو ضعيفة).
     """
     body = abs(close_price - open_price)
-    range_ = high_price - low_price
-    if range_ == 0:
+    total = high - low
+    if total == 0:
         return "شمعة غير صالحة"
+    body_ratio = body / total
 
-    body_ratio = body / range_
-
-    if body_ratio > 0.7:
+    if body_ratio > 0.6:
         if close_price > open_price:
             return "شمعة صاعدة قوية"
-        else:
+        elif open_price > close_price:
             return "شمعة هابطة قوية"
-    elif body_ratio < 0.2:
-        return "شمعة دوجي"
     else:
-        if close_price > open_price:
-            return "شمعة صاعدة"
-        else:
-            return "شمعة هابطة"
+        return "شمعة ضعيفة"
+
+def is_bullish_engulfing(prev_candle, curr_candle):
+    return (
+        prev_candle["close"] < prev_candle["open"] and
+        curr_candle["close"] > curr_candle["open"] and
+        curr_candle["open"] < prev_candle["close"] and
+        curr_candle["close"] > prev_candle["open"]
+    )
+
+def is_bearish_engulfing(prev_candle, curr_candle):
+    return (
+        prev_candle["close"] > prev_candle["open"] and
+        curr_candle["close"] < curr_candle["open"] and
+        curr_candle["open"] > prev_candle["close"] and
+        curr_candle["close"] < prev_candle["open"]
+    )
