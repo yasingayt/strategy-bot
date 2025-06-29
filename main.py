@@ -1,34 +1,31 @@
 import streamlit as st
-from PIL import Image
 from strategy_engine import analyze_chart
-import os
+from utils import extract_symbol_timeframe
+from PIL import Image
 
-st.set_page_config(page_title="تحليل الشارت الذكي", layout="centered")
+st.set_page_config(page_title="بوت تحليل شارت 🔍", layout="wide")
+st.title("📈 بوت التوصية الذكي - تحليل صورة شارت")
 
-st.title("📊 بوت التحليل الذكي من الصور")
-st.markdown("ارفع صورة لشارت وسأعطيك توصية احترافية بناءً على تحليلي اليدوي الذكي")
+uploaded_file = st.file_uploader("🖼️ ارفع صورة الشارت (PNG / JPG)", type=["png", "jpg", "jpeg"])
 
-uploaded_file = st.file_uploader("📤 ارفع صورة الشارت (من TradingView مثلًا)", type=["png", "jpg", "jpeg"])
-
-if uploaded_file:
+if uploaded_file is not None:
     image = Image.open(uploaded_file)
-    st.image(image, caption="الصورة المرفوعة", use_column_width=True)
+    st.image(image, caption="📷 صورة الشارت المرفوعة", use_column_width=True)
 
-    with st.spinner("جاري تحليل الصورة..."):
-        result = analyze_chart(image)
+    with st.spinner("⏳ يجري تحليل الصورة..."):
+        result = analyze_chart(uploaded_file)
 
-    st.markdown("---")
-    st.subheader("📌 نتيجة التحليل:")
+    st.success("✅ التوصية الذكية جاهزة:")
 
-    if result["status"] == "ok":
-        st.markdown(f"### الزوج: `{result['symbol']}`")
-        st.markdown(f"### الفريم: `{result['timeframe']}`")
-        st.markdown(f"### الاتجاه: `{result['trend']}`")
-        st.markdown(f"### نوع الشمعة: `{result['candle']}`")
-        st.markdown(f"### التوصية: `{result['signal']}`")
-
-        st.success(f"🎯 نقطة الدخول: `{result['entry']}`")
-        st.info(f"🎯 الهدف (TP): `{result['tp']}`")
-        st.error(f"🛑 الستوب (SL): `{result['sl']}`")
-    else:
-        st.warning("❌ لم يتمكن النظام من استخراج توصية دقيقة من هذه الصورة. جرب صورة أوضح.")
+    st.markdown(f"""
+    ### 🔍 الزوج: {result['symbol']} - {result['timeframe']}
+    - 🔁 الاتجاه: **{result['trend']}**
+    - 🕯️ نوع الشمعة: **{result['candle_type']}**
+    - 🎯 التوصية: **{result['recommendation']}**
+    - 📍 نقطة الدخول: `{result['entry']}`
+    - 🎯 الهدف: `{result['tp']}`
+    - 🛑 وقف الخسارة: `{result['sl']}`
+    - 💬 السبب: _{result['reason']}_
+    """)
+else:
+    st.info("👆 قم برفع صورة شارت ليتم تحليلها.")
