@@ -1,8 +1,12 @@
 import re
-import numpy as np
 
 def extract_symbol_timeframe(file) -> tuple:
-    filename = file.name.lower()
+    # محاولة آمنة للحصول على اسم الملف
+    filename = getattr(file, "name", "").lower()
+    if not filename:
+        filename = "unknown_gbpusd_m15.png"  # اسم افتراضي عند عدم وجود اسم ملف
+
+    # استخراج رمز الزوج والفريم من الاسم
     symbol_match = re.search(r"(xauusd|eurusd|gbpusd|usdjpy|usdchf|usdcad|audusd|nzdusd)", filename)
     tf_match = re.search(r"(m1|m5|m15|m30|h1|h4|d1|w1)", filename)
 
@@ -10,27 +14,24 @@ def extract_symbol_timeframe(file) -> tuple:
     timeframe = tf_match.group(1).upper() if tf_match else "فريم غير معروف"
     return symbol, timeframe
 
-def detect_trend(close_prices):
-    if len(close_prices) < 3:
-        return "بيانات غير كافية"
-    slope = np.polyfit(range(len(close_prices)), close_prices, 1)[0]
-    if slope > 0.0005:
+
+def detect_trend(candles) -> str:
+    ups = sum(1 for c in candles if c["close"] > c["open"])
+    downs = sum(1 for c in candles if c["close"] < c["open"])
+    if ups > downs:
         return "صاعد"
-    elif slope < -0.0005:
+    elif downs > ups:
         return "هابط"
     else:
         return "عرضي"
 
-def detect_candle_type(open_price, close_price, high_price, low_price):
-    body = abs(close_price - open_price)
-    total_range = high_price - low_price
-    if total_range == 0:
-        return "شمعة غير صالحة"
 
-    ratio = body / total_range
-    if ratio > 0.7:
+def detect_candle_type(candle: dict) -> str:
+    body = abs(candle["close"] - candle["open"])
+    wick = candle["high"] - candle["low"]
+    if body > wick * 0.6:
         return "شمعة قوية"
-    elif ratio > 0.4:
-        return "شمعة متوسطة"
-    else:
+    elif body < wick * 0.3:
         return "شمعة ضعيفة"
+    else:
+        return "شمعة عادية"
