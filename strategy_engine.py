@@ -1,33 +1,43 @@
-from image_reader import analyze_candles
+from utils import extract_symbol_timeframe, detect_trend, detect_candle_type
+import random
 
-def analyze_chart(image_file, symbol):
-    data = analyze_candles(image_file)
+def analyze_chart(image):
+    try:
+        # استخراج اسم الزوج والفريم من اسم الصورة
+        symbol, timeframe = extract_symbol_timeframe(image)
 
-    trend = data['trend']
-    candle_type = data['candle']
-    if trend == "صاعد" and candle_type == "شمعة ابتلاعية صاعدة":
-        signal = "شراء"
-        entry = data['high']
-        tp = round(entry + (entry * 0.002), 4)
-        sl = round(entry - (entry * 0.0015), 4)
-        reason = "شمعة ابتلاعية صاعدة بعد اتجاه صاعد واضح"
-    elif trend == "هابط" and candle_type == "شمعة ابتلاعية هابطة":
-        signal = "بيع"
-        entry = data['low']
-        tp = round(entry - (entry * 0.002), 4)
-        sl = round(entry + (entry * 0.0015), 4)
-        reason = "شمعة ابتلاعية هابطة بعد اتجاه هابط واضح"
-    else:
-        signal = "لا توجد صفقة"
-        entry = tp = sl = "-"
-        reason = "لم يتم التعرف على فرصة قوية واضحة"
+        # تحليل الاتجاه من الصورة
+        trend = detect_trend(image)
 
-    return {
-        "trend": trend,
-        "candle": candle_type,
-        "signal": signal,
-        "entry": entry,
-        "tp": tp,
-        "sl": sl,
-        "reason": reason
-    }
+        # تحليل نوع الشمعة الأخيرة
+        candle = detect_candle_type(image)
+
+        # توليد توصية على أساس الاتجاه + الشمعة
+        if trend == "صاعد" and candle == "شمعة ابتلاعية صاعدة":
+            signal = "شراء"
+            entry = "عند كسر قمة الشمعة"
+            tp = "أعلى 3 شموع سابقة"
+            sl = "أسفل الشمعة السابقة"
+        elif trend == "هابط" and candle == "شمعة ابتلاعية هابطة":
+            signal = "بيع"
+            entry = "عند كسر قاع الشمعة"
+            tp = "أدنى 3 شموع سابقة"
+            sl = "أعلى الشمعة السابقة"
+        else:
+            signal = "لا توجد صفقة قوية حالياً"
+            entry = tp = sl = "-"
+
+        return {
+            "status": "ok",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "trend": trend,
+            "candle": candle,
+            "signal": signal,
+            "entry": entry,
+            "tp": tp,
+            "sl": sl
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
